@@ -18,7 +18,9 @@ import com.example.data.local.entities.HydrationRecordEntity
 import com.example.data.local.entities.PersonalRecordEntity
 import com.example.data.local.entities.UserProfileEntity
 import com.example.data.local.entities.WeightRecordEntity
+import com.example.data.local.entities.WorkoutExerciseEntity
 import com.example.data.local.entities.WorkoutPlanEntity
+import com.example.data.local.entities.WorkoutScheduleEntity
 import kotlinx.coroutines.flow.Flow
 
 @Dao
@@ -96,6 +98,9 @@ interface ExerciseDao {
     suspend fun toggleFavorite(id: String, isFav: Boolean)
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertExercise(exercise: ExerciseEntity)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAll(exercises: List<ExerciseEntity>)
 
     @Query("SELECT COUNT(*) FROM exercises")
@@ -104,17 +109,61 @@ interface ExerciseDao {
 
 @Dao
 interface WorkoutDao {
-    @Query("SELECT * FROM workout_plans ORDER BY code ASC")
+    @Query("SELECT * FROM workout_plans ORDER BY code ASC, createdAt ASC")
     fun getAllPlans(): Flow<List<WorkoutPlanEntity>>
 
     @Query("SELECT * FROM workout_plans WHERE id = :id")
     suspend fun getPlanById(id: String): WorkoutPlanEntity?
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertPlan(plan: WorkoutPlanEntity)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertPlans(plans: List<WorkoutPlanEntity>)
 
     @Update
     suspend fun updatePlan(plan: WorkoutPlanEntity)
+
+    @Query("DELETE FROM workout_plans WHERE id = :id")
+    suspend fun deletePlan(id: String)
+
+    // Workout Exercises (Customized within each workout)
+    @Query("SELECT * FROM workout_exercises WHERE workoutId = :workoutId ORDER BY orderIndex ASC, id ASC")
+    fun getWorkoutExercises(workoutId: String): Flow<List<WorkoutExerciseEntity>>
+
+    @Query("SELECT * FROM workout_exercises WHERE workoutId = :workoutId ORDER BY orderIndex ASC, id ASC")
+    suspend fun getWorkoutExercisesOnce(workoutId: String): List<WorkoutExerciseEntity>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertWorkoutExercise(we: WorkoutExerciseEntity): Long
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertWorkoutExercises(list: List<WorkoutExerciseEntity>)
+
+    @Update
+    suspend fun updateWorkoutExercise(we: WorkoutExerciseEntity)
+
+    @Query("DELETE FROM workout_exercises WHERE id = :id")
+    suspend fun deleteWorkoutExercise(id: Long)
+
+    @Query("DELETE FROM workout_exercises WHERE workoutId = :workoutId")
+    suspend fun deleteWorkoutExercisesForPlan(workoutId: String)
+
+    // Weekly Schedule
+    @Query("SELECT * FROM workout_schedules ORDER BY dayOfWeek ASC")
+    fun getSchedule(): Flow<List<WorkoutScheduleEntity>>
+
+    @Query("SELECT * FROM workout_schedules ORDER BY dayOfWeek ASC")
+    suspend fun getScheduleOnce(): List<WorkoutScheduleEntity>
+
+    @Query("SELECT * FROM workout_schedules WHERE dayOfWeek = :dayOfWeek")
+    suspend fun getScheduleForDay(dayOfWeek: Int): WorkoutScheduleEntity?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertSchedule(schedule: List<WorkoutScheduleEntity>)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun saveScheduleDay(day: WorkoutScheduleEntity)
 
     // Active state for recovery
     @Query("SELECT * FROM active_workout_state WHERE id = 1")
@@ -136,6 +185,9 @@ interface WorkoutDao {
     @Query("SELECT * FROM completed_workouts ORDER BY startTimeMillis DESC")
     fun getAllCompletedWorkouts(): Flow<List<CompletedWorkoutEntity>>
 
+    @Query("SELECT * FROM completed_workouts WHERE id = :id")
+    suspend fun getCompletedWorkoutById(id: Long): CompletedWorkoutEntity?
+
     @Query("SELECT * FROM completed_workouts WHERE dateString = :dateString")
     fun getCompletedWorkoutsForDate(dateString: String): Flow<List<CompletedWorkoutEntity>>
 
@@ -148,6 +200,9 @@ interface WorkoutDao {
 
     @Query("SELECT * FROM completed_sets WHERE workoutSessionId = :sessionId ORDER BY id ASC")
     suspend fun getSetsForSession(sessionId: Long): List<CompletedSetEntity>
+
+    @Query("SELECT * FROM completed_sets WHERE workoutSessionId = :sessionId ORDER BY id ASC")
+    fun getSetsForSessionFlow(sessionId: Long): Flow<List<CompletedSetEntity>>
 
     @Query("SELECT * FROM completed_sets WHERE exerciseId = :exerciseId ORDER BY timestamp DESC LIMIT 10")
     suspend fun getRecentSetsForExercise(exerciseId: String): List<CompletedSetEntity>

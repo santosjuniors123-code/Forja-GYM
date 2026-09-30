@@ -4,8 +4,11 @@ data class ActiveSet(
     val setNumber: Int,
     var weightKg: Float,
     var reps: Int,
+    var durationSeconds: Int = 0,
+    var distanceKm: Float = 0f,
     var isCompleted: Boolean = false,
-    var isPR: Boolean = false
+    var isPR: Boolean = false,
+    var notes: String = ""
 )
 
 data class ActiveExercise(
@@ -13,12 +16,15 @@ data class ActiveExercise(
     val name: String,
     val muscleGroup: String,
     val equipment: String,
-    val defaultRestSeconds: Int,
-    val alternativeIds: List<String>,
+    val exerciseType: String = "Musculação",
+    val defaultRestSeconds: Int = 60,
+    val alternativeIds: List<String> = emptyList(),
     val sets: MutableList<ActiveSet> = mutableListOf(),
     val instructions: String = "",
     val tips: String = "",
-    val commonMistakes: String = ""
+    val commonMistakes: String = "",
+    var notes: String = "",
+    val previousPerformance: String? = null // e.g. "Último treino: 10x 30kg, 10x 30kg, 8x 32kg"
 )
 
 data class ActiveWorkoutSession(
@@ -29,5 +35,6 @@ data class ActiveWorkoutSession(
     var currentExerciseIndex: Int = 0,
     var isPaused: Boolean = false,
     var pausedSeconds: Long = 0,
-    var elapsedSeconds: Int = 0
+    var elapsedSeconds: Int = 0,
+    var notes: String = ""
 )

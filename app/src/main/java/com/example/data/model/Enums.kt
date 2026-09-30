@@ -53,3 +53,38 @@ enum class Gender(val label: String) {
     FEMININO("Feminino"),
     OUTRO("Outro / Prefiro não dizer")
 }
+
+enum class ExerciseType(val label: String) {
+    MUSCULACAO("Musculação"),
+    CARDIO("Cardio"),
+    ISOMETRIA("Isometria"),
+    TEMPO("Por Tempo"),
+    DISTANCIA("Por Distância")
+}
+
+enum class DayOfWeekPt(val dayNumber: Int, val shortName: String, val fullName: String) {
+    SEGUNDA(1, "SEG", "Segunda-feira"),
+    TERCA(2, "TER", "Terça-feira"),
+    QUARTA(3, "QUA", "Quarta-feira"),
+    QUINTA(4, "QUI", "Quinta-feira"),
+    SEXTA(5, "SEX", "Sexta-feira"),
+    SABADO(6, "SÁB", "Sábado"),
+    DOMINGO(7, "DOM", "Domingo");
+
+    companion object {
+        fun fromDayNumber(num: Int): DayOfWeekPt = entries.find { it.dayNumber == num } ?: SEGUNDA
+        fun fromCalendar(calendar: java.util.Calendar): DayOfWeekPt {
+            return when (calendar.get(java.util.Calendar.DAY_OF_WEEK)) {
+                java.util.Calendar.MONDAY -> SEGUNDA
+                java.util.Calendar.TUESDAY -> TERCA
+                java.util.Calendar.WEDNESDAY -> QUARTA
+                java.util.Calendar.THURSDAY -> QUINTA
+                java.util.Calendar.FRIDAY -> SEXTA
+                java.util.Calendar.SATURDAY -> SABADO
+                java.util.Calendar.SUNDAY -> DOMINGO
+                else -> SEGUNDA
+            }
+        }
+    }
+}
+

@@ -22,6 +22,7 @@ import com.example.ui.screens.CalculatorsScreen
 import com.example.ui.screens.CalendarScreen
 import com.example.ui.screens.CardioScreen
 import com.example.ui.screens.DashboardScreen
+import com.example.ui.screens.EditWorkoutScreen
 import com.example.ui.screens.ExerciseDetailScreen
 import com.example.ui.screens.ExerciseLibraryScreen
 import com.example.ui.screens.GoalsScreen
@@ -35,6 +36,8 @@ import com.example.ui.screens.RecordsScreen
 import com.example.ui.screens.ReportsScreen
 import com.example.ui.screens.SettingsScreen
 import com.example.ui.screens.VolumeScreen
+import com.example.ui.screens.WeekScheduleScreen
+import com.example.ui.screens.WorkoutHistoryDetailScreen
 import com.example.ui.screens.WorkoutsScreen
 import com.example.ui.theme.ForgeBlack
 import com.example.ui.viewmodel.ForjaViewModel
@@ -115,6 +118,22 @@ fun ForjaGymApp(
                 Screen.WORKOUTS -> WorkoutsScreen(
                     viewModel = viewModel,
                     onNavigate = { screen -> viewModel.navigateTo(screen) }
+                )
+
+                Screen.EDIT_WORKOUT -> EditWorkoutScreen(
+                    viewModel = viewModel,
+                    onNavigateBack = { viewModel.navigateBack() }
+                )
+
+                Screen.WEEK_SCHEDULE -> WeekScheduleScreen(
+                    viewModel = viewModel,
+                    onNavigateBack = { viewModel.navigateBack() },
+                    onNavigate = { screen -> viewModel.navigateTo(screen) }
+                )
+
+                Screen.WORKOUT_HISTORY_DETAIL -> WorkoutHistoryDetailScreen(
+                    viewModel = viewModel,
+                    onNavigateBack = { viewModel.navigateBack() }
                 )
 
                 Screen.ACTIVE_WORKOUT -> ActiveWorkoutScreen(

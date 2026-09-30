@@ -22,21 +22,32 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Bed
 import androidx.compose.material.icons.filled.Calculate
+import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.DirectionsRun
 import androidx.compose.material.icons.filled.EmojiEvents
+import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.FitnessCenter
 import androidx.compose.material.icons.filled.Flag
 import androidx.compose.material.icons.filled.LocalFireDepartment
 import androidx.compose.material.icons.filled.MonitorWeight
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material.icons.filled.WaterDrop
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -45,6 +56,8 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.data.local.entities.WorkoutPlanEntity
+import com.example.data.model.DayOfWeekPt
 import com.example.data.utils.FormatUtils
 import com.example.ui.components.ForjaCard
 import com.example.ui.components.ForjaPrimaryButton
@@ -59,6 +72,7 @@ import com.example.ui.theme.ForgeCard
 import com.example.ui.theme.ForgeCardElevated
 import com.example.ui.theme.ForgeGreen
 import com.example.ui.theme.ForgeOrange
+import com.example.ui.theme.ForgeRed
 import com.example.ui.theme.ForgeYellow
 import com.example.ui.theme.TextPrimaryDark
 import com.example.ui.theme.TextSecondaryDark
@@ -86,8 +100,29 @@ fun DashboardScreen(
     val diffToTarget = targetWeight - currentWeight
     val weightChange = currentWeight - initialWeight
 
-    val todayWorkoutPlan = plans.firstOrNull() ?: plans.getOrNull(0)
+    val weeklySchedule by viewModel.weeklySchedule.collectAsState()
+    val hasTodayOverride by viewModel.hasTodayOverride.collectAsState()
+    val todayOverridePlan by viewModel.todayOverridePlan.collectAsState()
+    val todayOverrideIsRest by viewModel.todayOverrideIsRest.collectAsState()
+
+    val todayDayNumber = remember { viewModel.getTodayDayOfWeek() }
+    val todayPt = remember { DayOfWeekPt.fromDayNumber(todayDayNumber) }
+    val todayScheduleEntry = weeklySchedule.find { it.dayOfWeek == todayDayNumber }
+
+    val isTodayRest = if (hasTodayOverride) todayOverrideIsRest else (todayScheduleEntry?.isRestDay ?: false)
+    val todayWorkoutPlan: WorkoutPlanEntity? = if (hasTodayOverride) {
+        todayOverridePlan
+    } else {
+        val assignedId = todayScheduleEntry?.workoutId
+        if (assignedId != null) plans.find { it.id == assignedId } ?: plans.firstOrNull()
+        else if (todayScheduleEntry?.isRestDay == true) null
+        else plans.firstOrNull()
+    }
     val nextWorkoutPlan = if (plans.size > 1) plans[1] else null
+
+    var showChooseOtherWorkoutDialog by remember { mutableStateOf(false) }
+    var selectedPlanToConfirm by remember { mutableStateOf<Pair<WorkoutPlanEntity?, Boolean>?>(null) }
+    var showMissedWorkoutDialog by remember { mutableStateOf(false) }
 
     val consumedWater = todayHydration?.consumedMl ?: 0
     val targetWater = todayHydration?.targetMl ?: (profile?.dailyWaterGoalMl ?: 3000)
@@ -177,8 +212,96 @@ fun DashboardScreen(
                 Spacer(modifier = Modifier.height(12.dp))
             }
 
-            // Workout of the Day Hero Card
-            if (todayWorkoutPlan != null) {
+            // Workout of the Day Hero Section (Requirement 9, 10, 11, 13)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "HOJE — ${todayPt.fullName.uppercase()}",
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Black,
+                    color = ForgeOrange,
+                    letterSpacing = 1.sp
+                )
+                TextButton(onClick = { onNavigate(Screen.WEEK_SCHEDULE) }) {
+                    Icon(Icons.Default.CalendarMonth, contentDescription = null, tint = ForgeOrange, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("Minha Semana", color = ForgeOrange, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                }
+            }
+
+            Spacer(modifier = Modifier.height(4.dp))
+
+            if (isTodayRest || todayWorkoutPlan == null) {
+                // REST DAY CARD (Requirement 11)
+                ForjaCard(
+                    backgroundColor = ForgeCardElevated,
+                    borderColor = ForgeBorder,
+                    testTag = "rest_day_card"
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(
+                                modifier = Modifier
+                                    .size(38.dp)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(Color(0xFF202028)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(Icons.Default.Bed, contentDescription = null, tint = ForgeOrange, modifier = Modifier.size(22.dp))
+                            }
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column {
+                                Text(
+                                    text = "😴 DIA DE DESCANSO",
+                                    fontSize = 16.sp,
+                                    fontWeight = FontWeight.Black,
+                                    color = TextPrimaryDark
+                                )
+                                Text(
+                                    text = "Recuperação muscular e recarga forjada",
+                                    fontSize = 12.sp,
+                                    color = TextSecondaryDark
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Button(
+                            onClick = { showChooseOtherWorkoutDialog = true },
+                            colors = ButtonDefaults.buttonColors(containerColor = ForgeOrange),
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(Icons.Default.SwapHoriz, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Escolher Outro Treino", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        }
+
+                        Button(
+                            onClick = { onNavigate(Screen.WEEK_SCHEDULE) },
+                            colors = ButtonDefaults.buttonColors(containerColor = ForgeCard),
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier.weight(0.9f)
+                        ) {
+                            Text("Ver Semana", fontSize = 11.sp, color = TextPrimaryDark)
+                        }
+                    }
+                }
+            } else {
+                // ACTIVE WORKOUT OF THE DAY CARD (Requirement 9 & 10)
                 ForjaCard(
                     backgroundColor = ForgeCardElevated,
                     borderColor = ForgeOrange.copy(alpha = 0.8f),
@@ -189,10 +312,10 @@ fun DashboardScreen(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
+                        Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
                             Box(
                                 modifier = Modifier
-                                    .size(34.dp)
+                                    .size(38.dp)
                                     .clip(RoundedCornerShape(8.dp))
                                     .background(ForgeOrange),
                                 contentAlignment = Alignment.Center
@@ -207,7 +330,7 @@ fun DashboardScreen(
                             Spacer(modifier = Modifier.width(10.dp))
                             Column {
                                 Text(
-                                    text = "TREINO DO DIA",
+                                    text = "🔥 TREINO DO DIA",
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = ForgeOrange,
@@ -234,7 +357,7 @@ fun DashboardScreen(
                     Spacer(modifier = Modifier.height(14.dp))
 
                     ForjaPrimaryButton(
-                        text = if (activeWorkout != null) "CONTINUAR TREINO EM ANDAMENTO" else "INICIAR TREINO",
+                        text = if (activeWorkout != null) "CONTINUAR TREINO EM ANDAMENTO" else "COMEÇAR TREINO",
                         icon = Icons.Default.PlayArrow,
                         onClick = {
                             if (activeWorkout != null) {
@@ -245,6 +368,31 @@ fun DashboardScreen(
                         },
                         testTag = "start_daily_workout_btn"
                     )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        TextButton(
+                            onClick = { showChooseOtherWorkoutDialog = true },
+                            modifier = Modifier.testTag("choose_other_workout_btn")
+                        ) {
+                            Icon(Icons.Default.SwapHoriz, contentDescription = null, tint = ForgeOrange, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Escolher outro treino", color = ForgeOrange, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                        }
+
+                        TextButton(
+                            onClick = { showMissedWorkoutDialog = true },
+                            modifier = Modifier.testTag("missed_workout_btn")
+                        ) {
+                            Icon(Icons.Default.ErrorOutline, contentDescription = null, tint = TextSecondaryDark, modifier = Modifier.size(14.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Treino não realizado", color = TextSecondaryDark, fontSize = 11.sp)
+                        }
+                    }
                 }
             }
 
@@ -560,5 +708,251 @@ fun DashboardScreen(
         item {
             Spacer(modifier = Modifier.height(28.dp))
         }
+    }
+
+    // Modal: ESCOLHER OUTRO TREINO (Requirement 10)
+    if (showChooseOtherWorkoutDialog) {
+        AlertDialog(
+            onDismissRequest = { showChooseOtherWorkoutDialog = false },
+            containerColor = ForgeCardElevated,
+            title = {
+                Text("ESCOLHER OUTRO TREINO", fontWeight = FontWeight.Black, fontSize = 18.sp, color = TextPrimaryDark)
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        text = "Qual treino deseja realizar hoje?",
+                        fontSize = 12.sp,
+                        color = TextSecondaryDark
+                    )
+
+                    // Option: Descanso
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(Color(0xFF141419))
+                            .clickable {
+                                showChooseOtherWorkoutDialog = false
+                                selectedPlanToConfirm = Pair(null, true)
+                            }
+                            .padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(Icons.Default.Bed, contentDescription = null, tint = ForgeOrange)
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Column {
+                            Text("😴 Dia de Descanso", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = TextPrimaryDark)
+                            Text("Tirar o dia para repouso", fontSize = 11.sp, color = TextSecondaryDark)
+                        }
+                    }
+
+                    // Workout plans list
+                    plans.forEach { plan ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(Color(0xFF141419))
+                                .clickable {
+                                    showChooseOtherWorkoutDialog = false
+                                    selectedPlanToConfirm = Pair(plan, false)
+                                }
+                                .padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(30.dp)
+                                    .clip(RoundedCornerShape(6.dp))
+                                    .background(ForgeOrange),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(plan.code, fontWeight = FontWeight.Black, color = Color.White, fontSize = 14.sp)
+                            }
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Column {
+                                Text(plan.name, fontWeight = FontWeight.Bold, fontSize = 14.sp, color = TextPrimaryDark)
+                                Text(plan.targetMuscles, fontSize = 11.sp, color = TextSecondaryDark)
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                TextButton(onClick = { showChooseOtherWorkoutDialog = false }) {
+                    Text("Cancelar", color = TextSecondaryDark)
+                }
+            }
+        )
+    }
+
+    // Modal: Confirmation: Usar somente hoje ou alterar programação? (Requirement 10)
+    if (selectedPlanToConfirm != null) {
+        val (plan, isRest) = selectedPlanToConfirm!!
+        val chosenName = if (isRest) "Descanso" else (plan?.name ?: "Treino Selecionado")
+
+        AlertDialog(
+            onDismissRequest = { selectedPlanToConfirm = null },
+            containerColor = ForgeCardElevated,
+            title = {
+                Text("APLICAR ALTERAÇÃO", fontWeight = FontWeight.Black, fontSize = 18.sp, color = TextPrimaryDark)
+            },
+            text = {
+                Column {
+                    Text(
+                        text = "Você selecionou \"$chosenName\" para hoje.",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 13.sp,
+                        color = ForgeOrange
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = "Deseja usar somente hoje ou alterar sua programação semanal permanentemente?",
+                        fontSize = 13.sp,
+                        color = TextPrimaryDark,
+                        lineHeight = 18.sp
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        viewModel.overrideTodayWorkout(plan, isRest, updateWeeklySchedule = false)
+                        selectedPlanToConfirm = null
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = ForgeOrange),
+                    shape = RoundedCornerShape(8.dp),
+                    modifier = Modifier.testTag("apply_only_today_btn")
+                ) {
+                    Text("Somente Hoje", fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        viewModel.overrideTodayWorkout(plan, isRest, updateWeeklySchedule = true)
+                        selectedPlanToConfirm = null
+                    },
+                    modifier = Modifier.testTag("apply_change_schedule_btn")
+                ) {
+                    Text("Alterar Programação", color = TextSecondaryDark, fontWeight = FontWeight.Bold)
+                }
+            }
+        )
+    }
+
+    // Modal: TREINO NÃO REALIZADO (Requirement 13)
+    if (showMissedWorkoutDialog) {
+        var showMoveDayPicker by remember { mutableStateOf(false) }
+        var targetMoveDay by remember { mutableStateOf(if (todayDayNumber < 7) todayDayNumber + 1 else 1) }
+
+        AlertDialog(
+            onDismissRequest = { showMissedWorkoutDialog = false },
+            containerColor = ForgeCardElevated,
+            title = {
+                Text("TREINO NÃO REALIZADO", fontWeight = FontWeight.Black, fontSize = 18.sp, color = TextPrimaryDark)
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(
+                        text = "O que deseja fazer com o treino de hoje?",
+                        fontSize = 13.sp,
+                        color = TextSecondaryDark
+                    )
+
+                    if (showMoveDayPicker) {
+                        Text("Selecione o novo dia:", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = ForgeOrange)
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            (1..7).forEach { dNum ->
+                                val dPt = DayOfWeekPt.fromDayNumber(dNum)
+                                val isSel = targetMoveDay == dNum
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(6.dp))
+                                        .background(if (isSel) ForgeOrange else Color(0xFF16161D))
+                                        .clickable { targetMoveDay = dNum }
+                                        .padding(horizontal = 8.dp, vertical = 6.dp)
+                                ) {
+                                    Text(
+                                        text = dPt.shortName,
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = if (isSel) Color.White else TextSecondaryDark
+                                    )
+                                }
+                            }
+                        }
+
+                        Button(
+                            onClick = {
+                                viewModel.rescheduleDayWorkout(todayDayNumber, targetMoveDay, "MOVE")
+                                showMissedWorkoutDialog = false
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = ForgeOrange),
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Text("Confirmar Mover para ${DayOfWeekPt.fromDayNumber(targetMoveDay).shortName}")
+                        }
+                    } else {
+                        Button(
+                            onClick = {
+                                if (todayWorkoutPlan != null) {
+                                    showMissedWorkoutDialog = false
+                                    viewModel.startWorkout(todayWorkoutPlan.id)
+                                }
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = ForgeOrange),
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Text("Fazer Hoje Agora", fontWeight = FontWeight.Bold)
+                        }
+
+                        Button(
+                            onClick = { showMoveDayPicker = true },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF26180E)),
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Text("Mover para Outro Dia...", color = ForgeOrange, fontWeight = FontWeight.Bold)
+                        }
+
+                        Button(
+                            onClick = {
+                                viewModel.rescheduleDayWorkout(todayDayNumber, todayDayNumber, "MARK_LOST")
+                                showMissedWorkoutDialog = false
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2A1515)),
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Text("Marcar como Perdido", color = ForgeRed, fontWeight = FontWeight.Bold)
+                        }
+
+                        TextButton(
+                            onClick = {
+                                viewModel.rescheduleDayWorkout(todayDayNumber, todayDayNumber, "SKIP")
+                                showMissedWorkoutDialog = false
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("Pular (Marcar como Descanso)", color = TextSecondaryDark)
+                        }
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                TextButton(onClick = { showMissedWorkoutDialog = false }) {
+                    Text("Voltar", color = TextSecondaryDark)
+                }
+            }
+        )
     }
 }

@@ -137,6 +137,7 @@ fun HistoryScreen(
                     backgroundColor = ForgeCardElevated,
                     borderColor = ForgeBorder,
                     modifier = Modifier.padding(bottom = 10.dp),
+                    onClick = { viewModel.openWorkoutHistoryDetail(workout) },
                     testTag = "history_item_${workout.id}"
                 ) {
                     Row(

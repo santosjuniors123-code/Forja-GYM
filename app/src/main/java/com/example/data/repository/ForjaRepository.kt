@@ -15,12 +15,17 @@ import com.example.data.local.entities.HydrationRecordEntity
 import com.example.data.local.entities.PersonalRecordEntity
 import com.example.data.local.entities.UserProfileEntity
 import com.example.data.local.entities.WeightRecordEntity
+import com.example.data.local.entities.WorkoutExerciseEntity
 import com.example.data.local.entities.WorkoutPlanEntity
+import com.example.data.local.entities.WorkoutScheduleEntity
+import com.example.data.model.ConfiguredSet
+import com.example.data.model.CustomSetsParser
 import com.example.data.utils.FormatUtils
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.withContext
+import java.util.UUID
 
 class ForjaRepository(private val database: ForjaDatabase) {
 
@@ -36,6 +41,51 @@ class ForjaRepository(private val database: ForjaDatabase) {
             workoutDao.insertPlans(SeedData.initialPlans)
             userDao.insertAchievements(SeedData.initialAchievements)
         }
+
+        // Initialize default weekly schedule if empty
+        val existingSchedule = workoutDao.getScheduleOnce()
+        if (existingSchedule.isEmpty()) {
+            val defaultSchedule = listOf(
+                WorkoutScheduleEntity(dayOfWeek = 1, workoutId = "treino_a", workoutName = "Treino A - Peito, Tríceps e Abdômen", isRestDay = false, status = "PENDENTE"),
+                WorkoutScheduleEntity(dayOfWeek = 2, workoutId = "treino_b", workoutName = "Treino B - Costas, Bíceps e Trapézio", isRestDay = false, status = "PENDENTE"),
+                WorkoutScheduleEntity(dayOfWeek = 3, workoutId = null, workoutName = "Dia de Descanso", isRestDay = true, status = "DESCANSO"),
+                WorkoutScheduleEntity(dayOfWeek = 4, workoutId = "treino_c", workoutName = "Treino C - Quadríceps, Posterior e Panturrilhas", isRestDay = false, status = "PENDENTE"),
+                WorkoutScheduleEntity(dayOfWeek = 5, workoutId = "treino_d", workoutName = "Treino D - Ombros e Deltoides", isRestDay = false, status = "PENDENTE"),
+                WorkoutScheduleEntity(dayOfWeek = 6, workoutId = null, workoutName = "Dia de Descanso", isRestDay = true, status = "DESCANSO"),
+                WorkoutScheduleEntity(dayOfWeek = 7, workoutId = null, workoutName = "Dia de Descanso", isRestDay = true, status = "DESCANSO")
+            )
+            workoutDao.insertSchedule(defaultSchedule)
+        }
+
+        // Initialize workout_exercises for plans if empty
+        val allPlans = workoutDao.getAllPlans().firstOrNull() ?: SeedData.initialPlans
+        for (plan in allPlans) {
+            val existingEx = workoutDao.getWorkoutExercisesOnce(plan.id)
+            if (existingEx.isEmpty() && plan.exerciseIds.isNotBlank()) {
+                val exIds = plan.exerciseIds.split(",").map { it.trim() }.filter { it.isNotEmpty() }
+                val exEntities = exerciseDao.getExercisesByIds(exIds).associateBy { it.id }
+                val list = exIds.mapIndexedNotNull { index, id ->
+                    val entity = exEntities[id] ?: return@mapIndexedNotNull null
+                    val defaultSetsList = (1..entity.defaultSets).map { setNum ->
+                        ConfiguredSet(setNumber = setNum, reps = entity.defaultReps, weightKg = 20f)
+                    }
+                    WorkoutExerciseEntity(
+                        workoutId = plan.id,
+                        exerciseId = entity.id,
+                        orderIndex = index,
+                        exerciseName = entity.name,
+                        exerciseType = entity.exerciseType,
+                        sets = entity.defaultSets,
+                        reps = entity.defaultReps,
+                        weightKg = 20f,
+                        restSeconds = entity.defaultRestSeconds,
+                        customSetsJson = CustomSetsParser.toJson(defaultSetsList)
+                    )
+                }
+                workoutDao.insertWorkoutExercises(list)
+            }
+        }
+
         val existingProfile = userDao.getUserProfileOnce()
         if (existingProfile == null) {
             val defaultProfile = UserProfileEntity(
@@ -135,15 +185,224 @@ class ForjaRepository(private val database: ForjaDatabase) {
         exerciseDao.toggleFavorite(id, isFav)
     }
 
-    // Workout Plans
+    suspend fun createCustomExercise(
+        name: String,
+        muscleGroup: String,
+        equipment: String,
+        exerciseType: String = "Musculação",
+        instructions: String = "Exercício personalizado criado pelo atleta.",
+        tips: String = "",
+        commonMistakes: String = ""
+    ): ExerciseEntity = withContext(Dispatchers.IO) {
+        val id = "custom_" + UUID.randomUUID().toString().take(8)
+        val entity = ExerciseEntity(
+            id = id,
+            name = name,
+            muscleGroup = muscleGroup,
+            equipment = equipment,
+            level = "Personalizado",
+            defaultSets = 3,
+            defaultReps = 10,
+            defaultRestSeconds = 60,
+            preparation = "Ajuste a posição inicial e postura corporal adequada.",
+            execution = instructions,
+            commonMistakes = commonMistakes.ifBlank { "Execução rápida sem controle de cadência." },
+            tips = tips.ifBlank { "Mantenha o foco na contração muscular máxima." },
+            alternativeIds = "",
+            isFavorite = false,
+            mediaType = "placeholder",
+            mediaPlaceholderLabel = "Exercício Personalizado",
+            exerciseType = exerciseType,
+            isCustom = true
+        )
+        exerciseDao.insertExercise(entity)
+        entity
+    }
+
+    // Workout Plans (CRUD)
     fun getAllPlans(): Flow<List<WorkoutPlanEntity>> = workoutDao.getAllPlans()
 
     suspend fun getPlanById(id: String): WorkoutPlanEntity? = withContext(Dispatchers.IO) {
         workoutDao.getPlanById(id)
     }
 
+    suspend fun createWorkout(
+        name: String,
+        description: String = "",
+        code: String = "Custom",
+        targetMuscles: String = "Corpo Inteiro",
+        estimatedMinutes: Int = 60
+    ): WorkoutPlanEntity = withContext(Dispatchers.IO) {
+        val id = "workout_" + UUID.randomUUID().toString().take(8)
+        val plan = WorkoutPlanEntity(
+            id = id,
+            code = code,
+            name = name,
+            description = description.ifBlank { "Treino personalizado forjado pelo atleta." },
+            targetMuscles = targetMuscles,
+            estimatedMinutes = estimatedMinutes,
+            exerciseIds = "",
+            createdAt = System.currentTimeMillis(),
+            updatedAt = System.currentTimeMillis()
+        )
+        workoutDao.insertPlan(plan)
+        plan
+    }
+
     suspend fun updatePlan(plan: WorkoutPlanEntity) = withContext(Dispatchers.IO) {
-        workoutDao.updatePlan(plan)
+        workoutDao.updatePlan(plan.copy(updatedAt = System.currentTimeMillis()))
+    }
+
+    suspend fun duplicateWorkout(planId: String): WorkoutPlanEntity = withContext(Dispatchers.IO) {
+        val original = workoutDao.getPlanById(planId) ?: throw IllegalArgumentException("Treino não encontrado")
+        val newId = "workout_" + UUID.randomUUID().toString().take(8)
+        val newCode = if (original.code.length <= 2) "${original.code}2" else original.code
+        val duplicatedPlan = original.copy(
+            id = newId,
+            code = newCode,
+            name = "${original.name} — cópia",
+            createdAt = System.currentTimeMillis(),
+            updatedAt = System.currentTimeMillis()
+        )
+        workoutDao.insertPlan(duplicatedPlan)
+
+        // Duplicate workout exercises
+        val exercises = workoutDao.getWorkoutExercisesOnce(planId)
+        val duplicatedExercises = exercises.map {
+            it.copy(id = 0, workoutId = newId)
+        }
+        if (duplicatedExercises.isNotEmpty()) {
+            workoutDao.insertWorkoutExercises(duplicatedExercises)
+        }
+        duplicatedPlan
+    }
+
+    suspend fun deleteWorkout(planId: String) = withContext(Dispatchers.IO) {
+        workoutDao.deletePlan(planId)
+        workoutDao.deleteWorkoutExercisesForPlan(planId)
+        // Clear from schedule if present
+        val schedule = workoutDao.getScheduleOnce()
+        for (day in schedule) {
+            if (day.workoutId == planId) {
+                workoutDao.saveScheduleDay(day.copy(workoutId = null, workoutName = "Dia de Descanso", isRestDay = true, status = "DESCANSO"))
+            }
+        }
+    }
+
+    // Workout Exercises (Customized per workout)
+    fun getWorkoutExercises(workoutId: String): Flow<List<WorkoutExerciseEntity>> =
+        workoutDao.getWorkoutExercises(workoutId)
+
+    suspend fun getWorkoutExercisesOnce(workoutId: String): List<WorkoutExerciseEntity> = withContext(Dispatchers.IO) {
+        workoutDao.getWorkoutExercisesOnce(workoutId)
+    }
+
+    suspend fun addExerciseToWorkout(we: WorkoutExerciseEntity): Long = withContext(Dispatchers.IO) {
+        val current = workoutDao.getWorkoutExercisesOnce(we.workoutId)
+        val nextOrder = current.size
+        val entityWithOrder = we.copy(orderIndex = nextOrder)
+        val newId = workoutDao.insertWorkoutExercise(entityWithOrder)
+
+        // Sync exerciseIds string in plan
+        syncPlanExerciseIds(we.workoutId)
+        newId
+    }
+
+    suspend fun updateWorkoutExercise(we: WorkoutExerciseEntity) = withContext(Dispatchers.IO) {
+        workoutDao.updateWorkoutExercise(we)
+        syncPlanExerciseIds(we.workoutId)
+    }
+
+    suspend fun removeExerciseFromWorkout(id: Long, workoutId: String) = withContext(Dispatchers.IO) {
+        workoutDao.deleteWorkoutExercise(id)
+        syncPlanExerciseIds(workoutId)
+    }
+
+    suspend fun reorderWorkoutExercises(workoutId: String, reorderedList: List<WorkoutExerciseEntity>) = withContext(Dispatchers.IO) {
+        reorderedList.forEachIndexed { index, item ->
+            workoutDao.updateWorkoutExercise(item.copy(orderIndex = index))
+        }
+        syncPlanExerciseIds(workoutId)
+    }
+
+    suspend fun syncWorkoutExercisesForPlan(workoutId: String, exercises: List<WorkoutExerciseEntity>) = withContext(Dispatchers.IO) {
+        workoutDao.deleteWorkoutExercisesForPlan(workoutId)
+        val entities = exercises.mapIndexed { index, ex ->
+            ex.copy(id = 0, workoutId = workoutId, orderIndex = index)
+        }
+        if (entities.isNotEmpty()) {
+            workoutDao.insertWorkoutExercises(entities)
+        }
+        syncPlanExerciseIds(workoutId)
+    }
+
+    private suspend fun syncPlanExerciseIds(workoutId: String) {
+        val exercises = workoutDao.getWorkoutExercisesOnce(workoutId)
+        val idsString = exercises.joinToString(",") { it.exerciseId }
+        val muscles = exercises.map { it.exerciseType }.distinct().joinToString(", ")
+        val plan = workoutDao.getPlanById(workoutId)
+        if (plan != null) {
+            workoutDao.updatePlan(
+                plan.copy(
+                    exerciseIds = idsString,
+                    targetMuscles = if (muscles.isNotBlank()) muscles else plan.targetMuscles,
+                    updatedAt = System.currentTimeMillis()
+                )
+            )
+        }
+    }
+
+    // Weekly Schedule
+    fun getWeeklySchedule(): Flow<List<WorkoutScheduleEntity>> = workoutDao.getSchedule()
+
+    suspend fun getWeeklyScheduleOnce(): List<WorkoutScheduleEntity> = withContext(Dispatchers.IO) {
+        workoutDao.getScheduleOnce()
+    }
+
+    suspend fun setScheduleDay(dayOfWeek: Int, workoutId: String?, workoutName: String?, isRestDay: Boolean) = withContext(Dispatchers.IO) {
+        val entry = WorkoutScheduleEntity(
+            dayOfWeek = dayOfWeek,
+            workoutId = workoutId,
+            workoutName = if (isRestDay) "Dia de Descanso" else (workoutName ?: "Treino Programado"),
+            isRestDay = isRestDay,
+            status = if (isRestDay) "DESCANSO" else "PENDENTE"
+        )
+        workoutDao.saveScheduleDay(entry)
+    }
+
+    suspend fun updateScheduleStatus(dayOfWeek: Int, status: String) = withContext(Dispatchers.IO) {
+        val current = workoutDao.getScheduleForDay(dayOfWeek)
+        if (current != null) {
+            workoutDao.saveScheduleDay(current.copy(status = status))
+        }
+    }
+
+    suspend fun rescheduleDayWorkout(fromDay: Int, toDay: Int, action: String) = withContext(Dispatchers.IO) {
+        val fromEntry = workoutDao.getScheduleForDay(fromDay) ?: return@withContext
+        when (action) {
+            "MARK_LOST" -> {
+                workoutDao.saveScheduleDay(fromEntry.copy(status = "PERDIDO"))
+            }
+            "SKIP" -> {
+                workoutDao.saveScheduleDay(fromEntry.copy(status = "DESCANSO", isRestDay = true, workoutName = "Treino Pulado"))
+            }
+            "MOVE" -> {
+                val toEntry = workoutDao.getScheduleForDay(toDay)
+                workoutDao.saveScheduleDay(
+                    fromEntry.copy(status = "DESCANSO", isRestDay = true, workoutId = null, workoutName = "Dia de Descanso")
+                )
+                if (toEntry != null) {
+                    workoutDao.saveScheduleDay(
+                        toEntry.copy(
+                            workoutId = fromEntry.workoutId,
+                            workoutName = fromEntry.workoutName,
+                            isRestDay = false,
+                            status = "PENDENTE"
+                        )
+                    )
+                }
+            }
+        }
     }
 
     // Active Workout
@@ -161,16 +420,43 @@ class ForjaRepository(private val database: ForjaDatabase) {
         workoutDao.clearActiveWorkoutState()
     }
 
+    // Previous performance comparison (Rule 16)
+    suspend fun getLastPerformanceForExercise(exerciseId: String): String? = withContext(Dispatchers.IO) {
+        val recentSets = workoutDao.getRecentSetsForExercise(exerciseId)
+        if (recentSets.isEmpty()) return@withContext null
+
+        val lastSessionId = recentSets.first().workoutSessionId
+        val sessionSets = recentSets.filter { it.workoutSessionId == lastSessionId }
+        val formattedSets = sessionSets.map { set ->
+            if (set.weightKg > 0f) "${set.reps}x ${set.weightKg.toInt()}kg"
+            else if (set.durationSeconds > 0) "${set.durationSeconds}s"
+            else "${set.reps} reps"
+        }.joinToString(", ")
+        "Último treino: $formattedSets"
+    }
+
     // Completed Workouts
     fun getAllCompletedWorkouts(): Flow<List<CompletedWorkoutEntity>> = workoutDao.getAllCompletedWorkouts()
     fun getTotalCompletedCount(): Flow<Int> = workoutDao.getTotalCompletedCount()
+
+    fun getSetsForSession(sessionId: Long): Flow<List<CompletedSetEntity>> =
+        workoutDao.getSetsForSessionFlow(sessionId)
+
+    suspend fun getSetsForSessionOnce(sessionId: Long): List<CompletedSetEntity> = withContext(Dispatchers.IO) {
+        workoutDao.getSetsForSession(sessionId)
+    }
+
+    suspend fun getCompletedWorkoutById(id: Long): CompletedWorkoutEntity? = withContext(Dispatchers.IO) {
+        workoutDao.getCompletedWorkoutById(id)
+    }
 
     suspend fun finishWorkout(
         planId: String,
         workoutName: String,
         startTimeMillis: Long,
         endTimeMillis: Long,
-        completedSets: List<CompletedSetEntity>
+        completedSets: List<CompletedSetEntity>,
+        workoutNotes: String = ""
     ): Long = withContext(Dispatchers.IO) {
         val durationSeconds = ((endTimeMillis - startTimeMillis) / 1000).toInt().coerceAtLeast(1)
         val totalVolume = completedSets.sumOf { (it.weightKg * it.reps).toDouble() }.toFloat()
@@ -186,7 +472,8 @@ class ForjaRepository(private val database: ForjaDatabase) {
             totalVolumeKg = totalVolume,
             totalSets = totalSets,
             totalReps = totalReps,
-            dateString = FormatUtils.todayDateString()
+            dateString = FormatUtils.todayDateString(),
+            notes = workoutNotes
         )
         val workoutId = workoutDao.insertCompletedWorkout(workoutEntity)
 
@@ -196,6 +483,11 @@ class ForjaRepository(private val database: ForjaDatabase) {
 
         // Clear active workout state
         workoutDao.clearActiveWorkoutState()
+
+        // Update schedule status for today to "REALIZADO"
+        val todayCalendar = java.util.Calendar.getInstance()
+        val todayPt = com.example.data.model.DayOfWeekPt.fromCalendar(todayCalendar)
+        updateScheduleStatus(todayPt.dayNumber, "REALIZADO")
 
         // Update user profile streaks & last workout date
         val profile = userDao.getUserProfileOnce()
@@ -229,7 +521,7 @@ class ForjaRepository(private val database: ForjaDatabase) {
         val currentPR = workoutDao.getPRForExercise(exerciseId)
         val isNewPR = currentPR == null || weightKg > currentPR.maxWeightKg || (weightKg == currentPR.maxWeightKg && reps > currentPR.repsAtMaxWeight)
 
-        if (isNewPR) {
+        if (isNewPR && weightKg > 0f) {
             val pr = PersonalRecordEntity(
                 exerciseId = exerciseId,
                 exerciseName = exerciseName,
@@ -480,7 +772,8 @@ class ForjaRepository(private val database: ForjaDatabase) {
                 totalVolumeKg = 8450f,
                 totalSets = 18,
                 totalReps = 175,
-                dateString = FormatUtils.formatDate(now - 2 * oneDay)
+                dateString = FormatUtils.formatDate(now - 2 * oneDay),
+                notes = "Treino forte, boa conexão mente-músculo."
             )
         )
         workoutDao.insertCompletedWorkout(
@@ -493,7 +786,8 @@ class ForjaRepository(private val database: ForjaDatabase) {
                 totalVolumeKg = 9120f,
                 totalSets = 20,
                 totalReps = 190,
-                dateString = FormatUtils.formatDate(now - oneDay)
+                dateString = FormatUtils.formatDate(now - oneDay),
+                notes = "Subiu carga na remada curvada."
             )
         )
 

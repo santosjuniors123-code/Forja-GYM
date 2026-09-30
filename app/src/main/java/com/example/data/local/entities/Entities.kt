@@ -43,18 +43,52 @@ data class ExerciseEntity(
     val alternativeIds: String, // Comma separated IDs
     val isFavorite: Boolean = false,
     val mediaType: String = "placeholder",
-    val mediaPlaceholderLabel: String = "Demonstração 3D disponível"
+    val mediaPlaceholderLabel: String = "Demonstração 3D disponível",
+    val exerciseType: String = "Musculação",
+    val isCustom: Boolean = false
 )
 
 @Entity(tableName = "workout_plans")
 data class WorkoutPlanEntity(
     @PrimaryKey val id: String,
-    val code: String, // "A", "B", "C", "D", "E"
+    val code: String, // "A", "B", "C", "D", "E" or custom name
     val name: String,
     val description: String,
     val targetMuscles: String,
     val estimatedMinutes: Int,
-    val exerciseIds: String // Comma separated IDs
+    val exerciseIds: String, // Comma separated IDs
+    val createdAt: Long = System.currentTimeMillis(),
+    val updatedAt: Long = System.currentTimeMillis()
+)
+
+@Entity(tableName = "workout_exercises")
+data class WorkoutExerciseEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val workoutId: String,
+    val exerciseId: String,
+    val orderIndex: Int = 0,
+    val exerciseName: String,
+    val exerciseType: String = "Musculação", // Musculação, Cardio, Isometria, Por Tempo, Por Distância
+    val sets: Int = 3,
+    val reps: Int = 10,
+    val weightKg: Float = 20f,
+    val restSeconds: Int = 60,
+    val durationSeconds: Int = 0,
+    val distanceKm: Float = 0f,
+    val speedKmh: Float = 0f,
+    val incline: Float = 0f,
+    val calories: Int = 0,
+    val notes: String = "",
+    val customSetsJson: String = ""
+)
+
+@Entity(tableName = "workout_schedules")
+data class WorkoutScheduleEntity(
+    @PrimaryKey val dayOfWeek: Int, // 1 = Segunda, 2 = Terça, ..., 7 = Domingo
+    val workoutId: String? = null,
+    val workoutName: String? = null,
+    val isRestDay: Boolean = false,
+    val status: String = "PENDENTE" // "REALIZADO", "DESCANSO", "PENDENTE", "PERDIDO"
 )
 
 @Entity(tableName = "active_workout_state")
@@ -81,7 +115,8 @@ data class CompletedWorkoutEntity(
     val totalVolumeKg: Float,
     val totalSets: Int,
     val totalReps: Int,
-    val dateString: String // YYYY-MM-DD
+    val dateString: String, // YYYY-MM-DD
+    val notes: String = ""
 )
 
 @Entity(tableName = "completed_sets")
@@ -93,7 +128,11 @@ data class CompletedSetEntity(
     val setNumber: Int,
     val weightKg: Float,
     val reps: Int,
+    val durationSeconds: Int = 0,
+    val distanceKm: Float = 0f,
     val isPR: Boolean = false,
+    val notes: String = "",
+    val exerciseType: String = "Musculação",
     val timestamp: Long = System.currentTimeMillis()
 )
 

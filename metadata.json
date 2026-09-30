@@ -1,0 +1,6 @@
+{
+  "name": "FORJAGYM",
+  "description": "Aplicativo completo de academia para treinos, cargas, evolução, hidratação, metas e histórico.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

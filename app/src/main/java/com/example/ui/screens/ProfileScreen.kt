@@ -208,7 +208,7 @@ fun ProfileScreen(
                                 color = TextPrimaryDark
                             )
                             Text(
-                                text = profile?.email?.ifBlank { "Atleta Cadastrado" } ?: "Atleta Cadastrado",
+                                text = "${profile?.mainGoal ?: "Hipertrofia"} • Atleta Forja",
                                 fontSize = 12.sp,
                                 color = TextSecondaryDark
                             )

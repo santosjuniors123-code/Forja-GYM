@@ -55,9 +55,7 @@ fun ForjaGymApp(
             currentScreen == Screen.HISTORY ||
             currentScreen == Screen.PROFILE
 
-    val isFullScreenAuth = currentScreen == Screen.LANDING ||
-            currentScreen == Screen.AUTH ||
-            currentScreen == Screen.ONBOARDING
+    val isFullScreenAuth = currentScreen == Screen.ONBOARDING
 
     // Handle back press
     BackHandler(enabled = !isFullScreenAuth && currentScreen != Screen.DASHBOARD) {
@@ -100,22 +98,9 @@ fun ForjaGymApp(
                 .padding(innerPadding)
         ) {
             when (currentScreen) {
-                Screen.LANDING -> LandingScreen(
-                    onStartNow = { viewModel.navigateTo(Screen.AUTH) },
-                    onLogin = { viewModel.navigateTo(Screen.AUTH) },
-                    onExploreDemo = { viewModel.loadDemoMode() }
-                )
-
-                Screen.AUTH -> AuthScreen(
+                Screen.LANDING, Screen.AUTH -> DashboardScreen(
                     viewModel = viewModel,
-                    onAuthSuccess = {
-                        val p = profile
-                        if (p != null && p.isOnboarded) {
-                            viewModel.navigateTo(Screen.DASHBOARD)
-                        } else {
-                            viewModel.navigateTo(Screen.ONBOARDING)
-                        }
-                    }
+                    onNavigate = { screen -> viewModel.navigateTo(screen) }
                 )
 
                 Screen.ONBOARDING -> OnboardingScreen(

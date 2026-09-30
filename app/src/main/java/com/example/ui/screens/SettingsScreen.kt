@@ -66,7 +66,6 @@ fun SettingsScreen(
     var notificationsEnabled by remember { mutableStateOf(true) }
     var useKg by remember { mutableStateOf(true) }
     var showFirebaseGuideDialog by remember { mutableStateOf(false) }
-    var showLogoutDialog by remember { mutableStateOf(false) }
 
     val profile by viewModel.userProfile.collectAsState()
 
@@ -105,32 +104,6 @@ fun SettingsScreen(
             confirmButton = {
                 TextButton(onClick = { showFirebaseGuideDialog = false }) {
                     Text("Entendido", color = ForgeOrange, fontWeight = FontWeight.Bold)
-                }
-            }
-        )
-    }
-
-    if (showLogoutDialog) {
-        AlertDialog(
-            onDismissRequest = { showLogoutDialog = false },
-            containerColor = ForgeCard,
-            title = { Text("Deseja sair da conta?", fontWeight = FontWeight.Bold, color = TextPrimaryDark) },
-            text = { Text("Seus treinos gravados localmente no banco Room continuarão seguros.", color = TextSecondaryDark, fontSize = 13.sp) },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        showLogoutDialog = false
-                        viewModel.logout()
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = ForgeRed),
-                    modifier = Modifier.testTag("confirm_logout_btn")
-                ) {
-                    Text("Sair da Conta", color = Color.White, fontWeight = FontWeight.Bold)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showLogoutDialog = false }) {
-                    Text("Cancelar", color = TextSecondaryDark)
                 }
             }
         )
@@ -289,17 +262,6 @@ fun SettingsScreen(
                         viewModel.loadDemoMode()
                     }
                 )
-            }
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            // Logout
-            Button(
-                onClick = { showLogoutDialog = true },
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2A1515)),
-                modifier = Modifier.fillMaxWidth().height(48.dp).testTag("logout_button")
-            ) {
-                Text("SAIR DA CONTA", color = ForgeRed, fontWeight = FontWeight.Bold, fontSize = 14.sp)
             }
 
             Spacer(modifier = Modifier.height(30.dp))

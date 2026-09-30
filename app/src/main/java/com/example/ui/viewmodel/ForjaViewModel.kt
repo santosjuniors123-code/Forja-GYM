@@ -46,7 +46,7 @@ class ForjaViewModel(application: Application) : AndroidViewModel(application) {
     val authRepository = AuthRepository(repository)
 
     // Navigation state
-    private val _currentScreen = MutableStateFlow(Screen.LANDING)
+    private val _currentScreen = MutableStateFlow(Screen.DASHBOARD)
     val currentScreen: StateFlow<Screen> = _currentScreen.asStateFlow()
 
     private val screenStack = mutableListOf<Screen>()
@@ -135,15 +135,7 @@ class ForjaViewModel(application: Application) : AndroidViewModel(application) {
     private fun observeUserProfile() {
         viewModelScope.launch {
             userProfile.collect { profile ->
-                if (profile != null && profile.isRegistered) {
-                    if (!profile.isOnboarded) {
-                        if (_currentScreen.value == Screen.LANDING || _currentScreen.value == Screen.AUTH) {
-                            _currentScreen.value = Screen.ONBOARDING
-                        }
-                    } else if (_currentScreen.value == Screen.LANDING || _currentScreen.value == Screen.AUTH || _currentScreen.value == Screen.ONBOARDING) {
-                        _currentScreen.value = Screen.DASHBOARD
-                    }
-                }
+                // Profile observed reactively
             }
         }
     }
@@ -162,7 +154,7 @@ class ForjaViewModel(application: Application) : AndroidViewModel(application) {
             _currentScreen.value = previous
             true
         } else {
-            if (_currentScreen.value != Screen.DASHBOARD && _currentScreen.value != Screen.LANDING) {
+            if (_currentScreen.value != Screen.DASHBOARD) {
                 _currentScreen.value = Screen.DASHBOARD
                 true
             } else {
@@ -569,12 +561,12 @@ class ForjaViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun logout() {
+    fun resetData() {
         viewModelScope.launch {
-            authRepository.logout()
+            repository.ensureInitialized()
             _activeWorkout.value = null
             screenStack.clear()
-            _currentScreen.value = Screen.LANDING
+            _currentScreen.value = Screen.DASHBOARD
         }
     }
 }

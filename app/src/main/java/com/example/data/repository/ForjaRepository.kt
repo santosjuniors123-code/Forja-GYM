@@ -36,6 +36,40 @@ class ForjaRepository(private val database: ForjaDatabase) {
             workoutDao.insertPlans(SeedData.initialPlans)
             userDao.insertAchievements(SeedData.initialAchievements)
         }
+        val existingProfile = userDao.getUserProfileOnce()
+        if (existingProfile == null) {
+            val defaultProfile = UserProfileEntity(
+                id = 1,
+                name = "Atleta",
+                email = "",
+                age = 26,
+                gender = "Masculino",
+                heightCm = 178f,
+                initialWeightKg = 80f,
+                currentWeightKg = 80f,
+                targetWeightKg = 75f,
+                mainGoal = "Hipertrofia",
+                trainingLevel = "Intermediário (1-3 anos)",
+                availableDays = 5,
+                currentStreak = 1,
+                bestStreak = 1,
+                lastWorkoutDate = "",
+                isRegistered = true,
+                isOnboarded = true,
+                isDemoUser = false,
+                dailyWaterGoalMl = 3000
+            )
+            userDao.saveUserProfile(defaultProfile)
+            progressDao.insertWeightRecord(
+                WeightRecordEntity(
+                    weightKg = 80f,
+                    dateString = FormatUtils.todayDateString(),
+                    timeString = FormatUtils.formatTime(System.currentTimeMillis()),
+                    note = "Peso inicial",
+                    timestamp = System.currentTimeMillis()
+                )
+            )
+        }
     }
 
     // User Profile
